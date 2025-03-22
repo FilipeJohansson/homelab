@@ -1,0 +1,107 @@
+services:
+  pihole:
+    container_name: pihole
+    hostname: pihole
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8181:80/tcp"
+#      - "67:67/udp" # Only required if you are using pi-hole as your DHCP server
+#    mem_limit: "150M"
+#    cpus: "0.3"
+    environment:
+      TZ: "America/Sao_Paulo"
+      VIRTUAL_HOST: "pihole"
+      FTLCONF_dns_listeningMode: "all"
+      FTLCONF_dns_upstreams: "8.8.8.8;8.8.4.4"
+      FTLCONF_LOCAL_IPV4: "192.168.0.2"
+    volumes:
+      - "/var/docker/pihole/etc-pihole:/etc/pihole"
+      - "/var/docker/pihole/etc-dnsmasq:/etc/dnsmasq.d"
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - homelab
+
+  nginx:
+    container_name: nginx
+    hostname: nginx
+    image: "jc21/nginx-proxy-manager:latest"
+    restart: unless-stopped
+    depends_on:
+      - "pihole"
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    environment:
+      TZ: "America/Sao_Paulo"
+    volumes:
+      - "/var/docker/nginx/data:/data"
+      - "/var/docker/nginx/letsencrypt:/etc/letsencrypt"
+    networks:
+      - homelab
+
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+      - "8000:8000"
+    environment:
+      VIRTUAL_HOST: "portainer.local"
+      VIRTUAL_PORT: 9000
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/var/docker/portainer/data:/data"
+    networks:
+      - homelab
+
+  glances:
+    container_name: glances
+    image: nicolargo/glances:latest-full
+    restart: unless-stopped
+    pid: host
+    ports:
+      - "61208:61208"
+    environment:
+      GLANCES_OPT: "-w"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/var/docker:/var/docker:ro"
+    networks:
+      - homelab
+
+  code-server:
+    container_name: code-server
+    image: lscr.io/linuxserver/code-server:latest
+    ports:
+      - "8443:8443"
+      - "5173:5173"
+    environment:
+      PUID: 0
+      PGID: 0
+      TZ: "America/Sao_Paulo"
+      PASSWORD: "${CODE_SERVER_PASSWORD}"
+      DOCKER_MODS: "linuxserver/mods:code-server-pnpm|linuxserver/mods:code-server-nodejs"
+    volumes:
+      - "/var/docker/code-server/config:/config"
+      - "/var/docker/code-server/config/workspace:/workspace"
+      - "/var/docker:/docker"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - homelab
+
+networks:
+  homelab:
+    name: "homelab"
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "10.0.0.0/24"
+          gateway: "10.0.0.1"

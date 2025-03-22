@@ -1,0 +1,5 @@
+.env
+code-server/
+nginx/
+pihole/
+portainer/
