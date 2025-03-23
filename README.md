@@ -26,7 +26,7 @@ This repository contains the configuration for my personal **homelab** environme
 1. Clone this repository to your local machine:
 
     ```bash
-    git clone [https://github.com/FilipeJohansson/homelab.git](https://github.com/FilipeJohansson/homelab)
+    git clone https://github.com/FilipeJohansson/homelab.git
     cd homelab
     ```
 2. Make sure Docker and Docker Compose are installed and running on your system.
