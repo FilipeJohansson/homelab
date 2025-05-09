@@ -9,8 +9,8 @@ services:
       - "53:53/udp"
       - "8181:80/tcp"
 #      - "67:67/udp" # Only required if you are using pi-hole as your DHCP server
-#    mem_limit: "150M"
-#    cpus: "0.3"
+    mem_limit: "150M"
+    cpus: "0.1"
     environment:
       TZ: "America/Sao_Paulo"
       VIRTUAL_HOST: "pihole"
@@ -36,6 +36,8 @@ services:
       - "80:80"
       - "81:81"
       - "443:443"
+    mem_limit: "200M"
+    cpus: "0.2"
     environment:
       TZ: "America/Sao_Paulo"
     volumes:
@@ -43,6 +45,7 @@ services:
       - "/var/docker/nginx/letsencrypt:/etc/letsencrypt"
     networks:
       - homelab
+      - firefly
 
   portainer:
     container_name: portainer
@@ -52,6 +55,8 @@ services:
       - "9000:9000"
       - "9443:9443"
       - "8000:8000"
+    mem_limit: "200M"
+    cpus: "0.1"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/var/docker/portainer/data:/data"
@@ -65,6 +70,8 @@ services:
     pid: host
     ports:
       - "61208:61208"
+    mem_limit: "150M"
+    cpus: "0.5"
     environment:
       GLANCES_OPT: "-w"
     volumes:
@@ -78,11 +85,12 @@ services:
     image: lscr.io/linuxserver/code-server:latest
     ports:
       - "8443:8443"
-      - "5173:5173"
+    mem_limit: "2G"
+    cpus: "1"
     environment:
+      TZ: "America/Sao_Paulo"
       PUID: 0
       PGID: 0
-      TZ: "America/Sao_Paulo"
       PASSWORD: "${CODE_SERVER_PASSWORD}"
       DOCKER_MODS: "linuxserver/mods:code-server-pnpm|linuxserver/mods:code-server-nodejs"
     volumes:
@@ -90,6 +98,92 @@ services:
       - "/var/docker/code-server/config/workspace:/workspace"
       - "/var/docker:/docker"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - homelab
+
+  firefly-app:
+    container_name: firefly-app
+    hostname: firefly-app
+    image: fireflyiii/core:latest
+    restart: unless-stopped
+    depends_on:
+      - firefly-db
+    ports:
+      - "83:8080"
+    mem_limit: "200M"
+    cpus: "0.2"
+    environment:
+      APP_KEY: "${FIREFLY_APP_KEY}"
+      DB_HOST: "firefly-db"
+      DB_PORT: "3306"
+      DB_CONNECTION: "mysql"
+      DB_DATABASE: "firefly"
+      DB_USERNAME: "firefly"
+      DB_PASSWORD: "${FIREFLY_APP_DB_PASSWORD}"
+    volumes:
+      - "/var/docker/firefly/www/html/storage/upload:/var/www/html/storage/upload"
+    networks:
+      - firefly
+
+  firefly-db:
+    container_name: firefly-db
+    hostname: firefly-db
+    image: mariadb:lts
+    restart: unless-stopped
+    mem_limit: "1G"
+    cpus: "1"
+    environment:
+      TZ: "America/Sao_Paulo"
+      MYSQL_DATABASE: "firefly"
+      MYSQL_USER: "firefly"
+      MYSQL_PASSWORD: "${FIREFLY_APP_DB_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${FIREFLY_APP_DB_ROOT_PASSWORD}"
+    volumes:
+      - "/var/docker/firefly/db:/var/lib/mysql"
+    networks:
+      - firefly
+
+  speedtest-tracker:
+    container_name: speedtest-tracker
+    hostname: speedtest-tracker
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    restart: unless-stopped
+    ports:
+        - 84:80
+        - 843:443
+    mem_limit: "300M"
+    cpus: "0.5"
+    environment:
+        DISPLAY_TIMEZONE: "America/Sao_Paulo"
+        PUID: "1000"
+        PGID: "1000"
+        APP_KEY: "${SPEEDTEST_TRACKER_APP_KEY}"
+        DB_CONNECTION: "sqlite"
+        SPEEDTEST_SCHEDULE: "0 0-23/4 * * *" # Executes every 4 hours
+    volumes:
+        - /var/docker/speedtest-tracker/config:/config
+    networks:
+      - homelab
+
+  go-chat-server:
+    container_name: go-chat-server
+    build:
+      context: /var/docker/personal-projects/go-chat/server
+      dockerfile: DockerFile
+    ports:
+      - "8081:8080"
+    volumes:
+      - /var/docker/personal-projects/go-chat/server/cmd/:/root/db
+    networks:
+      - homelab
+
+  go-chat-client:
+    container_name: go-chat-client
+    build:
+      context: /var/docker/personal-projects/go-chat/client
+      dockerfile: DockerFile
+    ports:
+      - "5174:5174"
     networks:
       - homelab
 
@@ -102,3 +196,11 @@ networks:
       config:
         - subnet: "10.0.0.0/24"
           gateway: "10.0.0.1"
+  firefly:
+    name: "firefly"
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "10.0.1.0/24"
+          gateway: "10.0.1.1"
